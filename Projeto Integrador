@@ -1,0 +1,93 @@
+#include <Wire.h> // protocolo I2C
+#include <LiquidCrystal_I2C.h>
+
+const int pinoLedVerm = 13; // LED VERMELHO - PRESENÇA DE GÁS
+const int pinoLedAzul = 12; // LED AZUL - NÍVEIS NORMAIS
+const int pinoSensor = 3;   // PINO DIGITAL DO SENSOR
+const int pinoBuzzer = 7;   // PINO DO BUZZER
+const int pinoCooler = 6;   // PINO DO COOLER (EXAUSTOR)
+
+int pin_a0 = A0;
+int nivel_sensor = 300;
+bool gatilho_ativo = false;
+unsigned long tempo_gatilho = 0;
+const unsigned long tempo_ativacao_cooler = 30000; // 30 segundos em milissegundos
+
+// Inicialização do LCD
+LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, NEGATIVE);
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(pin_a0, INPUT);
+  pinMode(pinoSensor, INPUT);
+  pinMode(pinoLedVerm, OUTPUT);
+  pinMode(pinoLedAzul, OUTPUT);
+  pinMode(pinoBuzzer, OUTPUT);
+  pinMode(pinoCooler, OUTPUT);
+
+  digitalWrite(pinoLedAzul, HIGH); // LED AZUL aceso no início
+  digitalWrite(pinoLedVerm, HIGH); // LED VERMELHO apagado no início
+
+  lcd.begin(16, 2);
+  lcd.noBacklight(); // com fundo claro
+  //lcd.backlight(); // com fundo normal
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("SENSOR DE GAS");
+  delay(2000);
+  lcd.clear();
+}
+
+void loop() {
+  // Leitura dos dados do sensor
+  int valor_analogico = analogRead(pin_a0);
+
+  // Mostra os dados no serial monitor
+  Serial.print("Pino A0: ");
+  Serial.println(valor_analogico);
+
+  // Verifica o nível de gás/fumaça detectado
+  if (valor_analogico > nivel_sensor) {
+    // Ativa o gatilho para o cooler
+    if (!gatilho_ativo) {
+      gatilho_ativo = true;
+      tempo_gatilho = millis();
+      digitalWrite(pinoLedVerm, HIGH); // LED VERMELHO aceso
+      digitalWrite(pinoLedAzul, LOW);  // LED AZUL apagado
+      digitalWrite(pinoBuzzer, HIGH);  // Ativa o buzzer
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("PRESENCA DE GAS");
+      lcd.setCursor(0, 1);
+      lcd.print(valor_analogico);
+      // Ativa o cooler (exaustor)
+      digitalWrite(pinoCooler, HIGH);
+    }
+
+    // Função de alerta sonoro
+    alerta();
+  } else {
+    // Desativa o gatilho
+    gatilho_ativo = false;
+    digitalWrite(pinoLedVerm, LOW);  // LED VERMELHO apagado
+    digitalWrite(pinoLedAzul, HIGH); // LED AZUL aceso
+    digitalWrite(pinoBuzzer, LOW);   // Desativa o buzzer
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("NIVEIS NORMAIS ");
+    lcd.setCursor(0, 1);
+    lcd.print(valor_analogico);
+
+    // Verifica se o cooler deve ser desligado
+    if (millis() - tempo_gatilho >= tempo_ativacao_cooler) {
+      digitalWrite(pinoCooler, LOW); // Desliga o cooler
+    }
+  }
+
+  delay(200); // Delay para estabilidade na leitura do sensor
+}
+
+void alerta() {
+  // Função de alerta sonoro
+  tone(pinoBuzzer, 3000, 150);
+}
